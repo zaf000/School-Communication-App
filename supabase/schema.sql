@@ -1,5 +1,5 @@
 -- School Communication App — Supabase Schema
--- Run this in the Supabase SQL editor to set up your database.
+-- Idempotent: safe to run multiple times on an existing database.
 
 -- ─── Extensions ──────────────────────────────────────────────────────────────
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -22,6 +22,7 @@ RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS profiles_updated_at ON profiles;
 CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE PROCEDURE handle_updated_at();
@@ -42,6 +43,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE handle_new_user();
@@ -83,6 +85,7 @@ CREATE TABLE IF NOT EXISTS notices (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS notices_updated_at ON notices;
 CREATE TRIGGER notices_updated_at
   BEFORE UPDATE ON notices
   FOR EACH ROW EXECUTE PROCEDURE handle_updated_at();
@@ -161,16 +164,54 @@ ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
--- Profiles: users can read all profiles, update only their own
+-- ─── Policies ────────────────────────────────────────────────────────────────
+-- Drop all policies first so they can be recreated cleanly.
+
+DROP POLICY IF EXISTS "profiles_select" ON profiles;
+DROP POLICY IF EXISTS "profiles_update" ON profiles;
+DROP POLICY IF EXISTS "profiles_insert" ON profiles;
+
+DROP POLICY IF EXISTS "groups_select" ON groups;
+DROP POLICY IF EXISTS "groups_insert" ON groups;
+
+DROP POLICY IF EXISTS "memberships_select" ON group_memberships;
+DROP POLICY IF EXISTS "memberships_insert" ON group_memberships;
+DROP POLICY IF EXISTS "memberships_delete" ON group_memberships;
+
+DROP POLICY IF EXISTS "notices_select" ON notices;
+DROP POLICY IF EXISTS "notices_insert" ON notices;
+DROP POLICY IF EXISTS "notices_update" ON notices;
+
+DROP POLICY IF EXISTS "notice_reads_select" ON notice_reads;
+DROP POLICY IF EXISTS "notice_reads_insert" ON notice_reads;
+
+DROP POLICY IF EXISTS "blog_select" ON blog_posts;
+DROP POLICY IF EXISTS "blog_insert" ON blog_posts;
+
+DROP POLICY IF EXISTS "info_select" ON info_pages;
+DROP POLICY IF EXISTS "info_insert" ON info_pages;
+DROP POLICY IF EXISTS "info_update" ON info_pages;
+
+DROP POLICY IF EXISTS "chats_select" ON chats;
+DROP POLICY IF EXISTS "chats_insert" ON chats;
+
+DROP POLICY IF EXISTS "chat_memberships_select" ON chat_memberships;
+DROP POLICY IF EXISTS "chat_memberships_insert" ON chat_memberships;
+DROP POLICY IF EXISTS "chat_memberships_delete" ON chat_memberships;
+
+DROP POLICY IF EXISTS "messages_select" ON messages;
+DROP POLICY IF EXISTS "messages_insert" ON messages;
+
+-- Profiles
 CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (true);
 CREATE POLICY "profiles_update" ON profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
--- Groups: all authenticated users can read
+-- Groups
 CREATE POLICY "groups_select" ON groups FOR SELECT USING (auth.uid() IS NOT NULL);
 CREATE POLICY "groups_insert" ON groups FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
--- Group memberships: users can see their own and admins/teachers can see all
+-- Group memberships
 CREATE POLICY "memberships_select" ON group_memberships FOR SELECT USING (auth.uid() IS NOT NULL);
 CREATE POLICY "memberships_insert" ON group_memberships FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "memberships_delete" ON group_memberships FOR DELETE USING (
@@ -178,7 +219,7 @@ CREATE POLICY "memberships_delete" ON group_memberships FOR DELETE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'teacher'))
 );
 
--- Notices: all authenticated users can read published notices
+-- Notices
 CREATE POLICY "notices_select" ON notices FOR SELECT
   USING (auth.uid() IS NOT NULL AND status = 'published');
 CREATE POLICY "notices_insert" ON notices FOR INSERT
@@ -192,11 +233,11 @@ CREATE POLICY "notices_update" ON notices FOR UPDATE
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
--- Notice reads: users can manage their own reads
+-- Notice reads
 CREATE POLICY "notice_reads_select" ON notice_reads FOR SELECT USING (user_id = auth.uid());
 CREATE POLICY "notice_reads_insert" ON notice_reads FOR INSERT WITH CHECK (user_id = auth.uid());
 
--- Blog posts: all authenticated users can read published posts
+-- Blog posts
 CREATE POLICY "blog_select" ON blog_posts FOR SELECT
   USING (auth.uid() IS NOT NULL AND status = 'published');
 CREATE POLICY "blog_insert" ON blog_posts FOR INSERT
@@ -205,20 +246,21 @@ CREATE POLICY "blog_insert" ON blog_posts FOR INSERT
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
--- Info pages: all authenticated users can read
+-- Info pages
 CREATE POLICY "info_select" ON info_pages FOR SELECT USING (auth.uid() IS NOT NULL);
 CREATE POLICY "info_insert" ON info_pages FOR INSERT
   WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 CREATE POLICY "info_update" ON info_pages FOR UPDATE
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
--- Chats: all authenticated users can see all chats (to discover and join)
+-- Chats
 CREATE POLICY "chats_select" ON chats FOR SELECT USING (auth.uid() IS NOT NULL);
 CREATE POLICY "chats_insert" ON chats FOR INSERT
   WITH CHECK (
-    auth.uid() IS NOT NULL AND
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'parent')
-    OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    auth.uid() IS NOT NULL AND (
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'parent') OR
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    )
   );
 
 -- Chat memberships
@@ -226,7 +268,7 @@ CREATE POLICY "chat_memberships_select" ON chat_memberships FOR SELECT USING (au
 CREATE POLICY "chat_memberships_insert" ON chat_memberships FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "chat_memberships_delete" ON chat_memberships FOR DELETE USING (user_id = auth.uid());
 
--- Messages: members can read messages in their chats
+-- Messages
 CREATE POLICY "messages_select" ON messages FOR SELECT
   USING (
     EXISTS (
@@ -244,8 +286,22 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
   );
 
 -- ─── Realtime ────────────────────────────────────────────────────────────────
-ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE notices;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'notices'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE notices;
+  END IF;
+END $$;
 
 -- ─── Indexes ─────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status);
