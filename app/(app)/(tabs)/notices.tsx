@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
 import { fetchNotices, fetchUserGroups } from '@/lib/database';
 import { Notice } from '@/types';
@@ -47,7 +47,7 @@ export default function NoticesScreen() {
     }
   }, [profile]);
 
-  useEffect(() => { loadNotices(); }, [loadNotices]);
+  useFocusEffect(useCallback(() => { loadNotices(); }, [loadNotices]));
   const onRefresh = () => { setRefreshing(true); loadNotices(); };
 
   const filtered = notices.filter((n) => {

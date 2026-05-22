@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/AuthContext';
 import { fetchBlogPosts } from '@/lib/database';
 import { BlogPost, BlogCategory } from '@/types';
@@ -44,7 +45,7 @@ export default function BlogScreen() {
     }
   }, []);
 
-  useEffect(() => { loadPosts(); }, [loadPosts]);
+  useFocusEffect(useCallback(() => { loadPosts(); }, [loadPosts]));
   const onRefresh = () => { setRefreshing(true); loadPosts(); };
 
   const filtered = category === 'all' ? posts : posts.filter((p) => p.category === category);
