@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -26,10 +25,12 @@ export default function CreatePostScreen() {
   const [coverUrl, setCoverUrl] = useState('');
   const [category, setCategory] = useState<BlogCategory>('school-life');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleCreate = async () => {
+    setErrorMsg('');
     if (!title.trim() || !body.trim()) {
-      Alert.alert('Missing fields', 'Please enter a title and body.');
+      setErrorMsg('Please enter a title and body.');
       return;
     }
     if (!profile) return;
@@ -39,15 +40,15 @@ export default function CreatePostScreen() {
       await createBlogPost({
         title: title.trim(),
         body: body.trim(),
-        cover_image_url: coverUrl.trim() || null,
+        cover_image_url: coverUrl.trim() || undefined,
         category,
         author_id: profile.id,
         status: 'published',
         published_at: new Date().toISOString(),
       });
       router.back();
-    } catch (e) {
-      Alert.alert('Error', 'Failed to create post. Please try again.');
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? 'Failed to create post. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -112,6 +113,12 @@ export default function CreatePostScreen() {
           />
         </View>
 
+        {errorMsg ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{errorMsg}</Text>
+          </View>
+        ) : null}
+
         <TouchableOpacity
           style={[styles.button, (!title.trim() || !body.trim() || loading) && styles.buttonDisabled]}
           onPress={handleCreate}
@@ -166,4 +173,12 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   cancel: { alignItems: 'center', padding: 12 },
   cancelText: { fontSize: 15, color: Colors.textSecondary },
+  errorBox: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  errorText: { color: '#DC2626', fontSize: 13, fontWeight: '500' },
 });

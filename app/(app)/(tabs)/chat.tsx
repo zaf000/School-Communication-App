@@ -57,6 +57,7 @@ export default function ChatScreen() {
   const otherChats = chats.filter((c) => !c.is_member);
 
   const isParent = profile?.role === 'parent';
+  const canCreateChat = profile?.role === 'parent' || profile?.role === 'admin';
 
   if (loading) return <LoadingSpinner fullScreen />;
 
@@ -67,7 +68,7 @@ export default function ChatScreen() {
           <Text style={styles.headerTitle}>Community Chat</Text>
           <Text style={styles.headerSub}>Parent-managed groups</Text>
         </View>
-        {isParent && (
+        {canCreateChat && (
           <TouchableOpacity style={styles.createBtn} onPress={() => router.push('/(app)/chat/create')}>
             <Text style={styles.createBtnText}>+ New</Text>
           </TouchableOpacity>
