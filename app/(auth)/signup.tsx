@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,14 +27,16 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('parent');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleSignup = async () => {
+    setErrorMsg('');
     if (!name.trim() || !email.trim() || !password.trim()) {
-      Alert.alert('Missing fields', 'Please fill in all fields.');
+      setErrorMsg('Please fill in all fields.');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Password too short', 'Password must be at least 6 characters.');
+      setErrorMsg('Password must be at least 6 characters.');
       return;
     }
 
@@ -50,7 +51,7 @@ export default function SignupScreen() {
     setLoading(false);
 
     if (error) {
-      Alert.alert('Sign up failed', error.message);
+      setErrorMsg(error.message);
       return;
     }
 
@@ -138,6 +139,12 @@ export default function SignupScreen() {
               </View>
             </View>
 
+            {errorMsg ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{errorMsg}</Text>
+              </View>
+            ) : null}
+
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
               onPress={handleSignup}
@@ -214,4 +221,12 @@ const styles = StyleSheet.create({
   linkRow: { alignItems: 'center' },
   linkText: { fontSize: 14, color: Colors.textSecondary },
   link: { color: Colors.primary, fontWeight: '600' },
+  errorBox: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  errorText: { color: '#DC2626', fontSize: 13, fontWeight: '500' },
 });
