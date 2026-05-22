@@ -10,7 +10,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.schoolcomm.app"
+      "bundleIdentifier": "com.schoolcomm.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to attach photos to messages and posts.",
+        "NSPhotoLibraryUsageDescription": "Used to attach photos to messages and posts.",
+        "NSMicrophoneUsageDescription": "Used for voice messages.",
+        "NSUserNotificationsUsageDescription": "We send notifications for new messages and school announcements."
+      }
     },
     "android": {
       "adaptiveIcon": {
